@@ -9,26 +9,25 @@
 //   Codenvy, S.A. - initial API and implementation
 //
 
-package exec_test
+package process_test
 
 import (
 	"testing"
 	"time"
-
-	"github.com/eclipse/che/agents/go-agents/exec-agent/exec"
+	"github.com/eclipse/che/agents/go-agents/core/process"
 )
 
 func TestCleanWithZeroThreshold(t *testing.T) {
 	p := startAndWaitTestProcess(testCmd, t)
-	defer cleanupLogsDir()
+	defer wipeLogs()
 
-	exec.NewCleaner(0, 0).CleanOnce()
+	process.NewCleaner(0, 0).CleanOnce()
 
-	_, err := exec.Get(p.Pid)
+	_, err := process.Get(p.Pid)
 	if err == nil {
 		t.Fatal("Must not exist")
 	}
-	if _, ok := err.(*exec.NoProcessError); !ok {
+	if _, ok := err.(*process.NoProcessError); !ok {
 		t.Fatal(err)
 	}
 }
@@ -40,13 +39,13 @@ func TestCleansOnlyUnusedProcesses(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// use one of the processes, so it is used now
-	_, _ = exec.Get(p1.Pid)
+	_, _ = process.Get(p1.Pid)
 
 	// cleanup immediately
-	(&exec.Cleaner{CleanupPeriod: 0, CleanupThreshold: 500 * time.Millisecond}).CleanOnce()
+	(&process.Cleaner{CleanupPeriod: 0, CleanupThreshold: 500 * time.Millisecond}).CleanOnce()
 
-	_, err1 := exec.Get(p1.Pid)
-	_, err2 := exec.Get(p2.Pid)
+	_, err1 := process.Get(p1.Pid)
+	_, err2 := process.Get(p2.Pid)
 
 	// process 1 must be cleaned
 	if err1 != nil {
@@ -54,7 +53,7 @@ func TestCleansOnlyUnusedProcesses(t *testing.T) {
 	}
 
 	// process 2 must exist
-	if _, ok := err2.(*exec.NoProcessError); !ok {
+	if _, ok := err2.(*process.NoProcessError); !ok {
 		t.Fatal("Expected process 2 to be cleaned")
 	}
 }

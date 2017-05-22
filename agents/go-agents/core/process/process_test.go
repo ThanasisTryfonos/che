@@ -9,7 +9,7 @@
 //   Codenvy, S.A. - initial API and implementation
 //
 
-package exec_test
+package process_test
 
 import (
 	"log"
@@ -21,7 +21,6 @@ import (
 
 	"github.com/eclipse/che/agents/go-agents/core/process"
 	"github.com/eclipse/che/agents/go-agents/core/rpc"
-	"github.com/eclipse/che/agents/go-agents/exec-agent/exec"
 )
 
 const (
@@ -31,11 +30,11 @@ const (
 var alphabet = []byte("abcdefgh123456789")
 
 func TestOneLineOutput(t *testing.T) {
-	defer cleanupLogsDir()
+	defer wipeLogs()
 	// create and start a process
 	p := startAndWaitTestProcess("echo test", t)
 
-	logs, _ := exec.ReadAllLogs(p.Pid)
+	logs, _ := process.ReadAllLogs(p.Pid)
 
 	if len(logs) != 1 {
 		t.Fatalf("Expected logs size to be 1, but got %d", len(logs))
@@ -47,13 +46,13 @@ func TestOneLineOutput(t *testing.T) {
 }
 
 func TestEmptyLinesOutput(t *testing.T) {
-	defer cleanupLogsDir()
+	defer wipeLogs()
 	p := startAndWaitTestProcess("printf \"\n\n\n\n\n\"", t)
 
-	logs, _ := exec.ReadAllLogs(p.Pid)
+	logs, _ := process.ReadAllLogs(p.Pid)
 
 	if len(logs) != 5 {
-		t.Fatal("Expected logs to be 4 sized")
+		t.Fatalf("Expected logs to be 5 sized, but the size is '%d'", len(logs))
 	}
 
 	for _, value := range logs {
@@ -64,22 +63,22 @@ func TestEmptyLinesOutput(t *testing.T) {
 }
 
 func TestAddSubscriber(t *testing.T) {
-	exec.LogsDir = TmpFile()
-	defer cleanupLogsDir()
+	process.SetLogsDir(TmpFile())
+	defer wipeLogs()
 
 	outputLines := []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"}
 
 	// create and start a process
-	pb := exec.NewBuilder().
+	pb := process.NewBuilder().
 		CmdName("test").
 		CmdType("test").
 		CmdLine("printf \"" + strings.Join(outputLines, "\n") + "\"")
 
 	// add a new subscriber
 	eventsChan := make(chan *rpc.Event)
-	pb.FirstSubscriber(exec.Subscriber{
+	pb.FirstSubscriber(process.Subscriber{
 		ID:      "test",
-		Mask:    exec.DefaultMask,
+		Mask:    process.DefaultMask,
 		Channel: eventsChan,
 	})
 
@@ -93,9 +92,9 @@ func TestAddSubscriber(t *testing.T) {
 	var received []string
 	go func() {
 		event := <-eventsChan
-		for event.EventType != exec.DiedEventType {
-			if event.EventType == exec.StdoutEventType {
-				out := event.Body.(*exec.ProcessOutputEventBody)
+		for event.EventType != process.DiedEventType {
+			if event.EventType == process.StdoutEventType {
+				out := event.Body.(*process.ProcessOutputEventBody)
 				received = append(received, out.Text)
 			}
 			event = <-eventsChan
@@ -118,8 +117,8 @@ func TestAddSubscriber(t *testing.T) {
 }
 
 func TestRestoreSubscriberForDeadProcess(t *testing.T) {
-	exec.LogsDir = TmpFile()
-	defer cleanupLogsDir()
+	process.SetLogsDir(TmpFile())
+	defer wipeLogs()
 	beforeStart := time.Now()
 	p := startAndWaitTestProcess("echo test", t)
 
@@ -134,7 +133,7 @@ func TestRestoreSubscriberForDeadProcess(t *testing.T) {
 			select {
 			case v := <-channel:
 				received = append(received, v)
-				if v.EventType == exec.DiedEventType {
+				if v.EventType == process.DiedEventType {
 					statusReceived = true
 				}
 			case <-time.After(time.Second):
@@ -144,9 +143,9 @@ func TestRestoreSubscriberForDeadProcess(t *testing.T) {
 		done <- true
 	}()
 
-	_ = exec.RestoreSubscriber(p.Pid, exec.Subscriber{
+	_ = process.RestoreSubscriber(p.Pid, process.Subscriber{
 		ID:      "test",
-		Mask:    exec.DefaultMask,
+		Mask:    process.DefaultMask,
 		Channel: channel,
 	}, beforeStart)
 
@@ -156,20 +155,20 @@ func TestRestoreSubscriberForDeadProcess(t *testing.T) {
 		t.Fatalf("Expected to recieve 2 events but got %d", len(received))
 	}
 	e1Type := received[0].EventType
-	e1Text := received[0].Body.(*exec.ProcessOutputEventBody).Text
-	if received[0].EventType != exec.StdoutEventType || e1Text != "test" {
+	e1Text := received[0].Body.(*process.ProcessOutputEventBody).Text
+	if received[0].EventType != process.StdoutEventType || e1Text != "test" {
 		t.Fatalf("Expected to receieve output event with text 'test', but got '%s' event with text %s",
 			e1Type,
 			e1Text)
 	}
-	if received[1].EventType != exec.DiedEventType {
+	if received[1].EventType != process.DiedEventType {
 		t.Fatal("Expected to get 'process_died' event")
 	}
 }
 
 func TestMachineProcessIsNotAliveAfterItIsDead(t *testing.T) {
 	p := startAndWaitTestProcess(testCmd, t)
-	defer cleanupLogsDir()
+	defer wipeLogs()
 	if p.Alive {
 		t.Fatal("Process should not be alive")
 	}
@@ -177,16 +176,16 @@ func TestMachineProcessIsNotAliveAfterItIsDead(t *testing.T) {
 
 func TestItIsNotPossibleToAddSubscriberToDeadProcess(t *testing.T) {
 	p := startAndWaitTestProcess(testCmd, t)
-	defer cleanupLogsDir()
-	if err := exec.AddSubscriber(p.Pid, exec.Subscriber{}); err == nil {
+	defer wipeLogs()
+	if err := process.AddSubscriber(p.Pid, process.Subscriber{}); err == nil {
 		t.Fatal("Should not be able to add subscriber")
 	}
 }
 
 func TestReadProcessLogs(t *testing.T) {
 	p := startAndWaitTestProcess(testCmd, t)
-	defer cleanupLogsDir()
-	logs, err := exec.ReadLogs(p.Pid, time.Time{}, time.Now())
+	defer wipeLogs()
+	logs, err := process.ReadLogs(p.Pid, time.Time{}, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,19 +201,23 @@ func TestReadProcessLogs(t *testing.T) {
 	}
 }
 
-func startAndWaitTestProcess(cmd string, t *testing.T) *exec.MachineProcess {
-	exec.LogsDir = TmpFile()
+func TestLogsAreNotWrittenIfLogsDirIsNotSet(t *testing.T) {
+
+}
+
+func startAndWaitTestProcess(cmd string, t *testing.T) *process.MachineProcess {
+	process.SetLogsDir(TmpFile());
 	events := make(chan *rpc.Event)
 	done := make(chan bool)
 
 	// Create and start process
-	pb := exec.NewBuilder().
+	pb := process.NewBuilder().
 		CmdName("test").
 		CmdType("test").
 		CmdLine(cmd).
-		FirstSubscriber(exec.Subscriber{
+		FirstSubscriber(process.Subscriber{
 			ID:      "test",
-			Mask:    exec.DefaultMask,
+			Mask:    process.DefaultMask,
 			Channel: events,
 		})
 
@@ -224,7 +227,7 @@ func startAndWaitTestProcess(cmd string, t *testing.T) *exec.MachineProcess {
 		for !statusReceived && !timeoutReached {
 			select {
 			case event := <-events:
-				if event.EventType == exec.DiedEventType {
+				if event.EventType == process.DiedEventType {
 					statusReceived = true
 				}
 			case <-time.After(time.Second):
@@ -241,11 +244,11 @@ func startAndWaitTestProcess(cmd string, t *testing.T) *exec.MachineProcess {
 
 	// Wait until process is finished or timeout is reached
 	if ok := <-done; !ok {
-		t.Fatalf("Expected to receive %s process event", exec.DiedEventType)
+		t.Fatalf("Expected to receive %s process event", process.DiedEventType)
 	}
 
 	// Check process state after it is finished
-	result, err := exec.Get(p.Pid)
+	result, err := process.Get(p.Pid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,9 +259,9 @@ func TmpFile() string {
 	return os.TempDir() + string(os.PathSeparator) + randomName(10)
 }
 
-func cleanupLogsDir() {
-	if err := os.RemoveAll(exec.LogsDir); err != nil {
-		log.Printf("Can't remove folder %s. Error: %s", exec.LogsDir, err)
+func wipeLogs() {
+	if err := process.WipeLogs(); err != nil {
+		log.Printf("Could not wipe process logs dir. %s", err.Error())
 	}
 }
 
