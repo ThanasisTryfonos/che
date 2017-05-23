@@ -60,7 +60,6 @@ public class MavenServerService {
     private final ProjectRegistry          projectRegistry;
     private final MavenWorkspace           mavenWorkspace;
     private final EclipseWorkspaceProvider eclipseWorkspaceProvider;
-    private final PomReconciler            pomReconciler;
 
     @Inject
     private MavenProgressNotifier notifier;
@@ -75,17 +74,18 @@ public class MavenServerService {
     private ClasspathManager classpathManager;
 
     @Inject
+    private PomReconciler pomReconciler;
+
+    @Inject
     public MavenServerService(MavenWrapperManager wrapperManager,
                               ProjectRegistry projectRegistry,
                               MavenWorkspace mavenWorkspace,
-                              EclipseWorkspaceProvider eclipseWorkspaceProvider,
-                              PomReconciler pomReconciler) {
+                              EclipseWorkspaceProvider eclipseWorkspaceProvider) {
 
         this.wrapperManager = wrapperManager;
         this.projectRegistry = projectRegistry;
         this.mavenWorkspace = mavenWorkspace;
         this.eclipseWorkspaceProvider = eclipseWorkspaceProvider;
-        this.pomReconciler = pomReconciler;
     }
 
     /**

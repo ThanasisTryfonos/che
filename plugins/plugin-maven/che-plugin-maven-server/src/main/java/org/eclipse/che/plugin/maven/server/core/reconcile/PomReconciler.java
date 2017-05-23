@@ -130,14 +130,15 @@ public class PomReconciler {
             throw new ServerException(format("Couldn't reconcile pom file '%s' because its content is empty", pomPath));
         }
 
-        IProject project = ResourcesPlugin.getWorkspace().getRoot().getProject(projectPath);
-        MavenProject mavenProject = mavenProjectManager.findMavenProject(project);
-        if (mavenProject == null) {
-            throw new NotFoundException(format("Couldn't reconcile pom file '%s' because maven project is not found", pomPath));
-        }
-
         try {
             Model.readFrom(new ByteArrayInputStream(pomContent.getBytes(defaultCharset())));
+
+            IProject project = ResourcesPlugin.getWorkspace().getRoot().getProject(projectPath);
+            MavenProject mavenProject = mavenProjectManager.findMavenProject(project);
+            if (mavenProject == null) {
+                return result;
+            }
+
             List<MavenProjectProblem> problems = mavenProject.getProblems();
 
             int start = pomContent.indexOf("<project ") + 1;
