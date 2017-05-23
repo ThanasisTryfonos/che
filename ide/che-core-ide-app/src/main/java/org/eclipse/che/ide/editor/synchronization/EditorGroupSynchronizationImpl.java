@@ -64,9 +64,15 @@ public class EditorGroupSynchronizationImpl implements EditorGroupSynchronizatio
             return;
         }
 
-        if (!synchronizedEditors.isEmpty()) {//group can contains unsaved content - we need update content for the editor
-            EditorPartPresenter groupMember = synchronizedEditors.keySet().iterator().next();
+        if (synchronizedEditors.isEmpty()) {
+            HandlerRegistration handlerRegistration = documentHandle.getDocEventBus().addHandler(DocumentChangeEvent.TYPE, this);
+            synchronizedEditors.put(editor, handlerRegistration);
+            return;
+        }
 
+        EditorPartPresenter groupMember = synchronizedEditors.keySet().iterator().next();
+        if ((groupMember instanceof EditorWithAutoSave) && !((EditorWithAutoSave)groupMember).isAutoSaveEnabled()) {
+            //group can contains unsaved content - we need update content for the editor
             Document editorDocument = documentHandle.getDocument();
             Document groupMemberDocument = getDocumentHandleFor(groupMember).getDocument();
 
@@ -172,7 +178,7 @@ public class EditorGroupSynchronizationImpl implements EditorGroupSynchronizatio
         final String oldContent = document.getContents();
         final TextPosition cursorPosition = document.getCursorPosition();
 
-        if (!(virtualFile instanceof File)){
+        if (!(virtualFile instanceof File)) {
             replaceContent(document, newContent, oldContent, cursorPosition);
             return;
         }
